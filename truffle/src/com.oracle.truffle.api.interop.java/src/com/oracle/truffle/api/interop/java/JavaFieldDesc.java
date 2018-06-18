@@ -193,13 +193,13 @@ abstract class SingleFieldDesc implements JavaFieldDesc {
         private MethodHandle makeGetMethodHandle() {
             try {
                 if (Modifier.isStatic(field.getModifiers())) {
-                    MethodHandle getter = MethodHandles.publicLookup().findStaticGetter(field.getDeclaringClass(), field.getName(), field.getType());
+                    MethodHandle getter = MethodHandles.publicLookup().unreflectGetter(field);
                     return MethodHandles.dropArguments(getter.asType(MethodType.methodType(Object.class)), 0, Object.class);
                 } else {
-                    MethodHandle getter = MethodHandles.publicLookup().findGetter(field.getDeclaringClass(), field.getName(), field.getType());
+                    MethodHandle getter = MethodHandles.publicLookup().unreflectGetter(field);
                     return getter.asType(MethodType.methodType(Object.class, Object.class));
                 }
-            } catch (NoSuchFieldException | IllegalAccessException e) {
+            } catch (IllegalAccessException e) {
                 throw new IllegalStateException(e);
             }
         }
@@ -207,14 +207,12 @@ abstract class SingleFieldDesc implements JavaFieldDesc {
         private MethodHandle makeSetMethodHandle() {
             try {
                 if (Modifier.isStatic(field.getModifiers())) {
-                    MethodHandle setter = MethodHandles.publicLookup().findStaticSetter(field.getDeclaringClass(), field.getName(), field.getType());
+                    MethodHandle setter = MethodHandles.publicLookup().unreflectSetter(field);
                     return MethodHandles.dropArguments(setter.asType(MethodType.methodType(void.class, Object.class)), 0, Object.class);
                 } else {
-                    MethodHandle setter = MethodHandles.publicLookup().findSetter(field.getDeclaringClass(), field.getName(), field.getType());
+                    MethodHandle setter = MethodHandles.publicLookup().unreflectSetter(field);
                     return setter.asType(MethodType.methodType(void.class, Object.class, Object.class));
                 }
-            } catch (NoSuchFieldException e) {
-                throw UnknownIdentifierException.raise(field.getName());
             } catch (IllegalAccessException e) {
                 if (Modifier.isFinal(field.getModifiers())) {
                     throw UnknownIdentifierException.raise(field.getName());

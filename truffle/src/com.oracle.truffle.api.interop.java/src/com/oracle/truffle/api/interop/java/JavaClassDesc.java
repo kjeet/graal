@@ -50,6 +50,8 @@ final class JavaClassDesc {
         }
     };
 
+    private static final boolean ALLOW_PRIVATE = true;
+
     @TruffleBoundary
     static JavaClassDesc forClass(Class<?> clazz) {
         return CACHED_DESCS.get(clazz);
@@ -60,11 +62,16 @@ final class JavaClassDesc {
     private volatile JNIMembers jniMembers;
 
     JavaClassDesc(Class<?> type) {
+        System.out.printf("JClassDesc: %s\n", type);
         this.type = type;
     }
 
     public Class<?> getType() {
         return type;
+    }
+
+    private static boolean isAllowed(int mod) {
+        return ALLOW_PRIVATE || Modifier.isPublic(mod);
     }
 
     private static class Members {
@@ -92,16 +99,17 @@ final class JavaClassDesc {
 
             collectPublicMethods(type, methodMap, staticMethodMap);
 
-            if (Modifier.isPublic(type.getModifiers())) {
+            if (isAllowed(type.getModifiers())) {
                 boolean inheritedPublicInstanceFields = false;
                 boolean inheritedPublicInaccessibleFields = false;
-                for (Field f : type.getFields()) {
+                for (Field f : type.getDeclaredFields()) {
+                    f.setAccessible(true);
                     if (!Modifier.isStatic(f.getModifiers())) {
                         if (f.getDeclaringClass() == type) {
                             assert !fieldMap.containsKey(f.getName());
                             fieldMap.put(f.getName(), SingleFieldDesc.unreflect(f));
                         } else {
-                            if (Modifier.isPublic(f.getDeclaringClass().getModifiers())) {
+                            if (isAllowed(f.getDeclaringClass().getModifiers())) {
                                 inheritedPublicInstanceFields = true;
                             } else {
                                 inheritedPublicInaccessibleFields = true;
@@ -123,7 +131,7 @@ final class JavaClassDesc {
                 }
             }
 
-            if (Modifier.isPublic(type.getModifiers())) {
+            if (isAllowed(type.getModifiers())) {
                 for (Constructor<?> c : type.getConstructors()) {
                     SingleMethodDesc overload = SingleMethodDesc.unreflect(c);
                     ctor = ctor == null ? overload : merge(ctor, overload);
@@ -151,11 +159,12 @@ final class JavaClassDesc {
         }
 
         private static void collectPublicMethods(Class<?> type, Map<String, JavaMethodDesc> methodMap, Map<String, JavaMethodDesc> staticMethodMap, Set<Object> visited, Class<?> startType) {
-            boolean isPublicType = Modifier.isPublic(type.getModifiers()) && !Proxy.isProxyClass(type);
+            boolean isPublicType = isAllowed(type.getModifiers()) && !Proxy.isProxyClass(type);
             boolean allMethodsPublic = true;
             if (isPublicType) {
-                for (Method m : type.getMethods()) {
-                    if (!Modifier.isPublic(m.getDeclaringClass().getModifiers())) {
+                for (Method m : type.getDeclaredMethods()) {
+                    m.setAccessible(true);
+                    if (!isAllowed(m.getDeclaringClass().getModifiers())) {
                         /*
                          * If a method is declared in a non-public direct superclass, there should
                          * be a public bridge method in this class that provides access to it.
@@ -236,12 +245,13 @@ final class JavaClassDesc {
             Set<String> fieldNames = new HashSet<>();
             for (Class<?> superclass = type; superclass != null && superclass != Object.class; superclass = superclass.getSuperclass()) {
                 boolean inheritedPublicInstanceFields = false;
-                for (Field f : superclass.getFields()) {
+                for (Field f : superclass.getDeclaredFields()) {
+                    f.setAccessible(true);
                     if (Modifier.isStatic(f.getModifiers())) {
                         continue;
                     }
                     if (f.getDeclaringClass() != superclass) {
-                        if (Modifier.isPublic(f.getDeclaringClass().getModifiers())) {
+                        if (isAllowed(f.getDeclaringClass().getModifiers())) {
                             inheritedPublicInstanceFields = true;
                         }
                         continue;
@@ -250,7 +260,7 @@ final class JavaClassDesc {
                     if (mayHaveInaccessibleFields && !fieldNames.add(f.getName())) {
                         continue;
                     }
-                    if (Modifier.isPublic(f.getDeclaringClass().getModifiers())) {
+                    if (isAllowed(f.getDeclaringClass().getModifiers())) {
                         fieldMap.putIfAbsent(f.getName(), SingleFieldDesc.unreflect(f));
                     } else {
                         assert mayHaveInaccessibleFields;
@@ -264,8 +274,9 @@ final class JavaClassDesc {
 
         private static String findFunctionalInterfaceMethodName(Class<?> clazz) {
             for (Class<?> iface : clazz.getInterfaces()) {
-                if (Modifier.isPublic(iface.getModifiers()) && iface.isAnnotationPresent(FunctionalInterface.class)) {
-                    for (Method m : iface.getMethods()) {
+                if (isAllowed(iface.getModifiers()) && iface.isAnnotationPresent(FunctionalInterface.class)) {
+                    for (Method m : iface.getDeclaredMethods()){
+                        m.setAccessible(true);
                         if (Modifier.isAbstract(m.getModifiers()) && !isObjectMethodOverride(m)) {
                             return m.getName();
                         }

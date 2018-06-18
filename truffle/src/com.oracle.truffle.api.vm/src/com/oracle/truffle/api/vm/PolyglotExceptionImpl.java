@@ -93,6 +93,9 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
         this.exception = original;
         this.guestFrames = TruffleStackTraceElement.getStackTrace(original);
 
+        // JEET
+        this.exception.printStackTrace();
+
         if (exception instanceof TruffleException) {
             TruffleException truffleException = (TruffleException) exception;
             this.internal = truffleException.isInternalError();

@@ -464,7 +464,7 @@ final class FunctionProxyHandler implements InvocationHandler {
         assert declaringClass.isInterface() : declaringClass;
         MethodHandle mh;
         try {
-            mh = MethodHandles.lookup().findSpecial(declaringClass, method.getName(), MethodType.methodType(method.getReturnType(), method.getParameterTypes()), declaringClass);
+            mh = MethodHandles.lookup().unreflectSpecial(method, declaringClass);
         } catch (IllegalAccessException e) {
             throw new UnsupportedOperationException(method.getName(), e);
         }
